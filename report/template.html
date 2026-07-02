@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ app_name }} — Review Analysis Report</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #2c3e50; }
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 40px; }
+  .header h1 { font-size: 2.2em; margin-bottom: 8px; }
+  .header p { opacity: 0.8; font-size: 1.1em; }
+  .meta { display: flex; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+  .meta-item { background: rgba(255,255,255,0.1); padding: 10px 18px; border-radius: 8px; font-size: 0.9em; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 30px 20px; }
+  .section { background: white; border-radius: 12px; padding: 30px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .section h2 { font-size: 1.5em; margin-bottom: 20px; color: #1a1a2e; border-bottom: 2px solid #e8ecf0; padding-bottom: 12px; }
+  .section h3 { font-size: 1.15em; margin: 18px 0 10px; color: #34495e; }
+  .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-card { flex: 1; min-width: 150px; background: #f0f4ff; border-radius: 10px; padding: 20px; text-align: center; }
+  .stat-card .number { font-size: 2em; font-weight: 700; color: #0f3460; }
+  .stat-card .label { font-size: 0.85em; color: #666; margin-top: 4px; }
+  .finding-card { background: #f0f9f4; border-left: 4px solid #2ecc71; padding: 14px 18px; border-radius: 6px; margin-bottom: 10px; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media(max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-box { background: #fafafa; border-radius: 8px; padding: 10px; }
+  .cluster-card { border: 1px solid #e8ecf0; border-radius: 10px; padding: 22px; margin-bottom: 18px; }
+  .cluster-card.high-intensity { border-left: 4px solid #e74c3c; }
+  .cluster-card.med-intensity { border-left: 4px solid #f39c12; }
+  .cluster-card.low-intensity { border-left: 4px solid #2ecc71; }
+  .cluster-title { font-size: 1.1em; font-weight: 600; margin-bottom: 12px; color: #1a1a2e; }
+  .cluster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media(max-width: 768px) { .cluster-grid { grid-template-columns: 1fr; } }
+  .cluster-field label { font-size: 0.75em; font-weight: 600; text-transform: uppercase; color: #999; letter-spacing: 0.5px; }
+  .cluster-field p { font-size: 0.9em; margin-top: 4px; color: #444; line-height: 1.5; }
+  .quotes-list { list-style: none; }
+  .quotes-list li { background: #f8f9fa; border-left: 3px solid #3498db; padding: 8px 12px; margin-bottom: 6px; font-size: 0.88em; font-style: italic; color: #555; border-radius: 0 6px 6px 0; }
+  .sentiment-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .sentiment-pos { background: #2ecc71; }
+  .sentiment-neu { background: #95a5a6; }
+  .sentiment-neg { background: #e74c3c; }
+  .tag { display: inline-block; background: #e8ecf0; padding: 3px 10px; border-radius: 20px; font-size: 0.78em; margin: 2px; color: #555; }
+  .opp-card { background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 14px; }
+  .opp-rank { font-size: 1.5em; font-weight: 700; color: #0f3460; min-width: 30px; }
+  .opp-content p { font-size: 0.9em; color: #444; margin-top: 4px; }
+  .effort-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 600; }
+  .effort-low { background: #d5f5e3; color: #1e8449; }
+  .effort-medium { background: #fdebd0; color: #a04000; }
+  .effort-high { background: #fadbd8; color: #922b21; }
+  .rec-card { background: #f0f4ff; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; font-size: 0.9em; color: #34495e; }
+  .rec-card.quick { border-left: 4px solid #2ecc71; }
+  .rec-card.strategic { border-left: 4px solid #3498db; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+  th { background: #1a1a2e; color: white; padding: 10px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e8ecf0; vertical-align: top; }
+  tr:hover td { background: #f8f9fa; }
+  .source-badge { padding: 2px 8px; border-radius: 20px; font-size: 0.75em; font-weight: 600; }
+  .source-play_store { background: #d5f5e3; color: #1e8449; }
+  .source-app_store { background: #d6eaf8; color: #1a5276; }
+  .source-reddit { background: #fdebd0; color: #a04000; }
+  .source-web { background: #e8daef; color: #6c3483; }
+  .text-truncate { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>{{ app_name }} — User Feedback Analysis</h1>
+  <p>Strategic Goal: {{ strategic_goal }}</p>
+  <div class="meta">
+    <div class="meta-item">Generated: {{ generated_at }}</div>
+    <div class="meta-item">Run ID: {{ run_id }}</div>
+    <div class="meta-item">Sources: {{ sources | join(", ") }}</div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- EXECUTIVE SUMMARY -->
+<div class="section">
+  <h2>1. Executive Summary</h2>
+  <div class="stat-row">
+    <div class="stat-card"><div class="number">{{ total_raw }}</div><div class="label">Reviews Scraped</div></div>
+    <div class="stat-card"><div class="number">{{ total_analyzed }}</div><div class="label">Relevant Reviews</div></div>
+    <div class="stat-card"><div class="number">{{ total_clusters }}</div><div class="label">Themes Discovered</div></div>
+    <div class="stat-card"><div class="number">{{ sources | length }}</div><div class="label">Sources</div></div>
+  </div>
+  <p style="color:#444; line-height:1.7; margin-bottom:20px;">{{ synthesis.executive_summary }}</p>
+  <h3>Top 3 Findings</h3>
+  {% for finding in synthesis.top_3_findings %}
+  <div class="finding-card">{{ finding }}</div>
+  {% endfor %}
+</div>
+
+<!-- SOURCE & VOLUME -->
+<div class="section">
+  <h2>2. Source & Volume Breakdown</h2>
+  <div class="chart-grid">
+    <div class="chart-box"><div id="chart_source_volume"></div></div>
+    <div class="chart-box"><div id="chart_sentiment_donut"></div></div>
+  </div>
+</div>
+
+<!-- THEME LANDSCAPE -->
+<div class="section">
+  <h2>3. Theme Landscape</h2>
+  <p style="color:#666; margin-bottom:16px;">Each box represents a discovered theme. Size = frequency. Color = intensity (red = high).</p>
+  <div class="chart-box"><div id="chart_theme_treemap"></div></div>
+  <br>
+  {% for a in cluster_analyses %}
+  {% set intensity = a.intensity_score if a.intensity_score is defined else 0.5 %}
+  <div class="cluster-card {% if intensity > 0.65 %}high-intensity{% elif intensity > 0.35 %}med-intensity{% else %}low-intensity{% endif %}">
+    <div class="cluster-title">{{ a.label }}</div>
+    <div class="cluster-grid">
+      <div>
+        <div class="cluster-field"><label>Core Frustration</label><p>{{ a.frustration }}</p></div>
+        <div class="cluster-field" style="margin-top:12px;"><label>Unmet Need</label><p>{{ a.unmet_need }}</p></div>
+      </div>
+      <div>
+        <div class="cluster-field">
+          <label>User Quotes</label>
+          <ul class="quotes-list">
+            {% for q in a.quotes %}
+            <li>{{ q }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        <div class="cluster-field" style="margin-top:12px;"><label>Workarounds</label><p>{{ a.workarounds }}</p></div>
+      </div>
+    </div>
+    {% set sj = a.sentiment_json if a.sentiment_json is mapping else {} %}
+    {% set total_sent = (sj.positive | default(0)) + (sj.neutral | default(0)) + (sj.negative | default(0)) %}
+    <div style="margin-top:14px;">
+      <label style="font-size:0.75em; font-weight:600; text-transform:uppercase; color:#999;">Sentiment</label>
+      <div class="sentiment-bar">
+        {% if total_sent > 0 %}
+        <div class="sentiment-pos" style="width:{{ ((sj.positive | default(0)) / total_sent * 100) | round }}%"></div>
+        <div class="sentiment-neu" style="width:{{ ((sj.neutral | default(0)) / total_sent * 100) | round }}%"></div>
+        <div class="sentiment-neg" style="width:{{ ((sj.negative | default(0)) / total_sent * 100) | round }}%"></div>
+        {% endif %}
+      </div>
+      <span style="font-size:0.78em; color:#666;">
+        {{ sj.positive | default(0) }} positive |
+        {{ sj.neutral | default(0) }} neutral |
+        {{ sj.negative | default(0) }} negative
+      </span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- SENTIMENT DEEP DIVE -->
+<div class="section">
+  <h2>4. Sentiment Deep Dive</h2>
+  <div class="chart-box"><div id="chart_sentiment_per_cluster"></div></div>
+</div>
+
+<!-- BEHAVIORAL PATTERNS -->
+<div class="section">
+  <h2>5. User Behavioral Patterns</h2>
+  <div class="cluster-grid">
+    <div>
+      <h3>What Users Are Trying To Do</h3>
+      {% for goal in synthesis.behavioral_goals %}
+      <div class="finding-card" style="background:#f0f4ff; border-color:#3498db;">{{ goal }}</div>
+      {% endfor %}
+    </div>
+    <div>
+      <h3>Where the App Gets in the Way</h3>
+      {% for fp in synthesis.app_friction_points %}
+      <div class="finding-card" style="background:#fff5f5; border-color:#e74c3c;">{{ fp }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% if synthesis.cross_cutting_patterns %}
+  <h3 style="margin-top:20px;">Cross-Cutting Patterns</h3>
+  <p style="color:#444; line-height:1.7;">{{ synthesis.cross_cutting_patterns }}</p>
+  {% endif %}
+  {% if synthesis.conflicting_needs %}
+  <h3>Conflicting User Needs</h3>
+  <p style="color:#444; line-height:1.7;">{{ synthesis.conflicting_needs }}</p>
+  {% endif %}
+</div>
+
+<!-- OPPORTUNITY MAP -->
+<div class="section">
+  <h2>6. Opportunity Map</h2>
+  <div class="chart-box"><div id="chart_opportunity_scatter"></div></div>
+  <h3 style="margin-top:24px;">Opportunity Gaps</h3>
+  {% for opp in synthesis.opportunity_gaps %}
+  <div class="opp-card">
+    <div class="opp-rank">#{{ loop.index }}</div>
+    <div class="opp-content">
+      <strong>{{ opp.gap }}</strong>
+      <p>Frequency: {{ (opp.user_frequency * 100) | round }}% | Strategic Fit: {{ (opp.strategic_fit * 100) | round }}% |
+        <span class="effort-badge effort-{{ opp.effort }}">{{ opp.effort | upper }} EFFORT</span>
+      </p>
+    </div>
+  </div>
+  {% endfor %}
+
+  <h3>Quick Wins</h3>
+  {% for r in synthesis.quick_wins %}
+  <div class="rec-card quick">{{ r }}</div>
+  {% endfor %}
+
+  <h3>Strategic Recommendations</h3>
+  {% for r in synthesis.strategic_recommendations %}
+  <div class="rec-card strategic">{{ r }}</div>
+  {% endfor %}
+</div>
+
+<!-- APPENDIX -->
+<div class="section">
+  <h2>7. Appendix — All Reviewed Records</h2>
+  <p style="color:#666; margin-bottom:16px;">Showing up to 300 records. Full dataset in Supabase (run_id: {{ run_id }}).</p>
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr><th>Source</th><th>Cluster</th><th>Review Text</th></tr></thead>
+    <tbody>
+      {% for r in all_reviews %}
+      <tr>
+        <td><span class="source-badge source-{{ r.source }}">{{ r.source }}</span></td>
+        <td><span class="tag">{{ r.cluster_label }}</span></td>
+        <td class="text-truncate" title="{{ r.text }}">{{ r.text[:120] }}{% if r.text | length > 120 %}...{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+</div>
+
+<script>
+{% for chart_id, chart_json in charts.items() %}
+{% if chart_json and chart_json != '{}' %}
+(function() {
+  var spec = {{ chart_json | safe }};
+  Plotly.newPlot('chart_{{ chart_id }}', spec.data, spec.layout, {responsive: true});
+})();
+{% endif %}
+{% endfor %}
+</script>
+
+</body>
+</html>

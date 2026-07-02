@@ -1,0 +1,33 @@
+# Secrets — never commit
+.env
+.env.local
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Generated reports (keep the template)
+*.html
+!report/template.html
+
+# Local scraped data outputs
+scraped_reviews_all.json
+data_raw_reviews.json
+data_clustered_reviews.json
+data_clustered_reviews.csv
+spotify_400_reviews.csv
+
+# IDE / OS / tooling
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db

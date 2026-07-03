@@ -11,4 +11,7 @@ jinja2==3.1.4
 pandas==2.2.2
 numpy==1.26.4
 scikit-learn==1.5.0
-app-store-scraper==0.3.5
+# app-store-scraper removed: pinned requests==2.23.0 which conflicts with streamlit's
+# requests>=2.27, forcing pip into a 10+ min backtracking loop that OOMs the build
+# container. scraper/app_store.py handles ImportError gracefully — App Store is skipped
+# and Play Store + web + Reddit sources top up via the orchestrator's balancing logic.

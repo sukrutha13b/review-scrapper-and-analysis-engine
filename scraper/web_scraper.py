@@ -1,15 +1,11 @@
-"""Routes web/reddit queries to the cheapest working backend:
-  - `site:reddit.com` queries → Reddit's public JSON (free, no key)
-  - general web queries → Brave Search (2000/mo free), SerpAPI fallback
-
-Keeps `scrape_web_snippets` and `generate_extra_queries` as the public API so
+"""Routes `site:reddit.com` queries to Reddit's public JSON (free, no key)
+and sends every other query to SerpAPI. Public API is unchanged so
 orchestrator.py doesn't have to know which backend served each query."""
 import time
 
 from serpapi import GoogleSearch
 
 from config import SERPAPI_KEY, MAX_REVIEWS_PER_SOURCE
-from scraper.brave_search import search_brave
 from scraper.reddit_search import search_reddit
 
 # Be polite to Reddit's public JSON — one call/sec avoids their soft rate limit.
@@ -17,8 +13,6 @@ REDDIT_DELAY_SEC = 1.0
 
 
 def _serpapi_search(query: str, app_name: str) -> list[dict]:
-    if not SERPAPI_KEY:
-        return []
     try:
         data = GoogleSearch({
             "q": query,
@@ -53,11 +47,11 @@ def _serpapi_search(query: str, app_name: str) -> list[dict]:
 
 
 def scrape_web_snippets(app_name: str, search_queries: list[str], max_reviews: int | None = None) -> list[dict]:
-    """Run search queries via the cheapest backend that works for each."""
+    """Reddit queries hit reddit.com/search.json directly; everything else goes through SerpAPI."""
     limit = max_reviews or MAX_REVIEWS_PER_SOURCE
     reddit_qs = [q for q in search_queries if "site:reddit.com" in q]
     web_qs = [q for q in search_queries if "site:reddit.com" not in q]
-    print(f"[Web] {len(reddit_qs)} reddit-direct + {len(web_qs)} general-web queries (target: {limit})")
+    print(f"[Web] {len(reddit_qs)} reddit-direct + {len(web_qs)} SerpAPI queries (target: {limit})")
 
     results: list[dict] = []
     seen: set[str] = set()
@@ -75,22 +69,11 @@ def scrape_web_snippets(app_name: str, search_queries: list[str], max_reviews: i
         _add(search_reddit(q, app_name))
         time.sleep(REDDIT_DELAY_SEC)
 
-    # 2. General web queries — Brave first, SerpAPI as last resort
-    serpapi_calls = 0
-    brave_calls = 0
+    # 2. General web queries — SerpAPI
     for q in web_qs:
-        items = search_brave(q, app_name)
-        if items is None:
-            items = _serpapi_search(q, app_name)
-            serpapi_calls += 1
-        else:
-            brave_calls += 1
-        _add(items)
+        _add(_serpapi_search(q, app_name))
 
-    print(
-        f"[Web] Collected {len(results)} snippets "
-        f"(reddit-direct: {len(reddit_qs)}, brave: {brave_calls}, serpapi: {serpapi_calls})"
-    )
+    print(f"[Web] Collected {len(results)} snippets (reddit-direct: {len(reddit_qs)}, serpapi: {len(web_qs)})")
     return results[:limit]
 
 

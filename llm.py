@@ -1,5 +1,12 @@
 import google.generativeai as genai
-from config import GEMINI_API_KEY, GEMINI_MODEL_CASCADE
+import requests
+from config import (
+    GEMINI_API_KEY,
+    GEMINI_MODEL_CASCADE,
+    GROK_API_KEY,
+    GROK_BASE_URL,
+    GROK_MODEL_CASCADE,
+)
 import json
 import re
 import time
@@ -31,7 +38,6 @@ def _extract_text(response) -> str | None:
 def _extract_json_block(raw: str) -> str:
     """Strip code fences and isolate the first {...} or [...] JSON block."""
     stripped = re.sub(r"```(?:json)?\s*|```", "", raw).strip()
-    # Prefer a full JSON object/array if the model wrapped it in prose.
     for open_ch, close_ch in (("{", "}"), ("[", "]")):
         start = stripped.find(open_ch)
         if start == -1:
@@ -48,10 +54,17 @@ def _extract_json_block(raw: str) -> str:
     return stripped
 
 
-def call_gemini(prompt: str, expect_json: bool = True, max_retries: int = 2) -> dict | list | str | None:
-    """Call Gemini with cascade fallback across models.
-    If expect_json, parses response as JSON.
-    Returns None only if every model and retry fails."""
+def _parse_or_return(raw: str, expect_json: bool):
+    if not expect_json:
+        return raw
+    try:
+        return json.loads(_extract_json_block(raw))
+    except json.JSONDecodeError:
+        return None
+
+
+def _try_gemini(prompt: str, expect_json: bool, max_retries: int):
+    """Cascade through Gemini models. Returns parsed value or None."""
     for model_name in GEMINI_MODEL_CASCADE:
         for attempt in range(max_retries):
             try:
@@ -59,15 +72,13 @@ def call_gemini(prompt: str, expect_json: bool = True, max_retries: int = 2) -> 
                 response = model.generate_content(prompt)
                 raw = _extract_text(response)
                 if raw is None:
-                    # Safety block or empty candidate — try next model.
-                    break
-                if not expect_json:
-                    return raw
-                try:
-                    return json.loads(_extract_json_block(raw))
-                except json.JSONDecodeError as je:
-                    print(f"[LLM] JSON parse failed on {model_name} attempt {attempt + 1}: {je}")
-                    continue
+                    break  # safety block or empty — try next model
+                parsed = _parse_or_return(raw, expect_json)
+                if parsed is not None:
+                    return parsed
+                # JSON parse failed — retry same model once, then move on.
+                print(f"[LLM] JSON parse failed on {model_name} attempt {attempt + 1}")
+                continue
             except Exception as e:
                 err = str(e).lower()
                 if "404" in err or "not found" in err:
@@ -80,5 +91,70 @@ def call_gemini(prompt: str, expect_json: bool = True, max_retries: int = 2) -> 
                     continue
                 print(f"[LLM] {model_name} error: {e}")
                 break
+    return None
+
+
+def _try_grok(prompt: str, expect_json: bool, max_retries: int):
+    """Fallback cascade through Grok (xAI) models. Returns parsed value or None."""
+    if not GROK_API_KEY:
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {GROK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    for model_name in GROK_MODEL_CASCADE:
+        for attempt in range(max_retries):
+            try:
+                payload = {
+                    "model": model_name,
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+                if expect_json:
+                    payload["response_format"] = {"type": "json_object"}
+                r = requests.post(
+                    f"{GROK_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=90,
+                )
+                if r.status_code == 429:
+                    wait = 15 * (attempt + 1)
+                    print(f"[LLM] Grok rate limited on {model_name}, waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+                if r.status_code == 404 or r.status_code == 400:
+                    print(f"[LLM] Grok {model_name} unavailable ({r.status_code}), skipping")
+                    break
+                r.raise_for_status()
+                raw = r.json()["choices"][0]["message"]["content"].strip()
+                if not raw:
+                    break
+                parsed = _parse_or_return(raw, expect_json)
+                if parsed is not None:
+                    return parsed
+                print(f"[LLM] Grok JSON parse failed on {model_name} attempt {attempt + 1}")
+                continue
+            except requests.RequestException as e:
+                print(f"[LLM] Grok {model_name} network error: {e}")
+                break
+            except Exception as e:
+                print(f"[LLM] Grok {model_name} error: {e}")
+                break
+    return None
+
+
+def call_gemini(prompt: str, expect_json: bool = True, max_retries: int = 2) -> dict | list | str | None:
+    """Kept for backward compat. Tries Gemini cascade, then Grok if configured."""
+    result = _try_gemini(prompt, expect_json, max_retries)
+    if result is not None:
+        return result
+
+    if GROK_API_KEY:
+        print("[LLM] Gemini cascade exhausted — falling back to Grok")
+        result = _try_grok(prompt, expect_json, max_retries)
+        if result is not None:
+            return result
+
     print("[LLM] All models failed")
     return None

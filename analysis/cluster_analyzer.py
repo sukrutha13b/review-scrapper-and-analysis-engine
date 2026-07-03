@@ -1,4 +1,5 @@
 from llm import call_gemini
+from config import LLM_MIN_INTERVAL_SEC
 import time
 
 
@@ -96,6 +97,6 @@ def analyze_all_clusters(clustered_reviews: list[dict]) -> list[dict]:
         print(f"[ClusterAnalyzer] Cluster {cluster_id}: {data['label']} ({len(data['reviews'])} reviews)")
         analysis = analyze_cluster(cluster_id, data["label"], data["reviews"])
         analyses.append(analysis)
-        time.sleep(3)
+        time.sleep(LLM_MIN_INTERVAL_SEC)
 
     return analyses

@@ -7,7 +7,7 @@ Streamlit app that scrapes user reviews for any app (Play Store, App Store, Redd
 1. **Discover** — Gemini generates targeted search queries and keywords for the app + strategic goal.
 2. **Scrape** — Play Store (google-play-scraper), App Store (app-store-scraper), Reddit + web via SerpAPI. Auto-balances when one source under-delivers.
 3. **Filter** — keyword-relevance scoring, caps to `TARGET_TOTAL_REVIEWS`.
-4. **Embed** — local `sentence-transformers/all-MiniLM-L6-v2` (no API cost).
+4. **Embed** — Gemini `text-embedding-004` (batched; cascades to `embedding-001` on rate limits).
 5. **Cluster** — HDBSCAN with KMeans fallback; Gemini names each cluster.
 6. **Analyze** — per-cluster Gemini analysis (frustration, quotes, unmet need, sentiment, intensity).
 7. **Synthesize** — cross-cluster strategic synthesis (findings, opportunity gaps, quick wins).

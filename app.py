@@ -2,6 +2,8 @@ import streamlit as st
 import json
 import copy
 import gc
+import io
+import pandas as pd
 
 st.set_page_config(page_title="Review Discovery Engine", page_icon="🔍", layout="centered")
 
@@ -81,6 +83,20 @@ if run_button:
 
     saved = save_raw_reviews(all_raw, run_id)
     st.success(f"✅ Total: {saved} raw reviews saved")
+
+    # Offer the scraped data as a download BEFORE any downstream step can fail —
+    # so if analysis/report generation breaks, the user still walks away with usable data.
+    csv_buf = io.StringIO()
+    pd.DataFrame(all_raw).to_csv(csv_buf, index=False)
+    st.download_button(
+        label="📥 Download scraped reviews (CSV)",
+        data=csv_buf.getvalue().encode("utf-8"),
+        file_name=f"{run_id}_raw_reviews.csv",
+        mime="text/csv",
+        use_container_width=True,
+        key="download_raw",
+    )
+    st.caption("Save this now — if any later step fails you can still analyze this data yourself.")
 
     # --- Step 3: Filter ---
     status.text("🔍 Step 3/7 — Filtering for relevant reviews...")

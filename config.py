@@ -29,6 +29,7 @@ SUPABASE_KEY = _get_secret("SUPABASE_KEY")
 
 GEMINI_API_KEY = _get_secret("GEMINI_API_KEY")
 SERPAPI_KEY = _get_secret("SERPAPI_KEY")
+BRAVE_API_KEY = _get_secret("BRAVE_API_KEY")  # preferred: 2000 free queries/mo vs SerpAPI's 250
 GROK_API_KEY = _get_secret("GROK_API_KEY")  # optional fallback if Gemini exhausts
 
 GROK_BASE_URL = "https://api.x.ai/v1"
@@ -69,9 +70,10 @@ def validate_config():
         "SUPABASE_URL": SUPABASE_URL,
         "SUPABASE_KEY": SUPABASE_KEY,
         "GEMINI_API_KEY": GEMINI_API_KEY,
-        "SERPAPI_KEY": SERPAPI_KEY,
     }
     missing = [k for k, v in required.items() if not v]
     if missing:
         raise ValueError(f"Missing environment variables: {', '.join(missing)}")
+    if not (BRAVE_API_KEY or SERPAPI_KEY):
+        raise ValueError("Missing web-search key: set BRAVE_API_KEY (preferred) or SERPAPI_KEY")
     return True

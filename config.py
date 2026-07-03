@@ -57,8 +57,8 @@ LLM_MIN_INTERVAL_SEC = 6
 TARGET_CLUSTER_COUNT = 10
 
 GEMINI_EMBEDDING_CASCADE = [
+    "models/gemini-embedding-001",
     "models/text-embedding-004",
-    "models/embedding-001",
 ]
 EMBEDDING_BATCH_SIZE = 100
 EMBEDDING_TASK_TYPE = "clustering"
